@@ -53,11 +53,12 @@ class MLForecaster:
     A class used to build up forecasting models and compare results with professional forecast.
 
     Attributes:
+        dataset (str): The dataset to be used.
         model (str): The model to be used.
+        model_name (str): The full name of the model.
     """
 
     def __init__(self, dataset: str, model: str = "en") -> None:
-        """Determine the model to be used."""
         self.dataset = dataset
         self.model = model
         self.model_name = {
@@ -66,28 +67,25 @@ class MLForecaster:
             "svr": "Support Vector Regression",
             "lstm": "LSTM",
         }[model]
+        self.correlation_matrix = None
 
         if self.model not in ["en", "rf", "svr", "lstm"]:
             raise ValueError(
                 'Invalid model name. Please choose one of: "en", "rf", "svr", "lstm".'
             )
 
-    def corr_matrix(self, df: pd.DataFrame) -> sns.heatmap:
+    def draw_corr_matrix(self) -> None:
         """
         Draw a correlation matrix of the given dataframe.
-
-        Args:
-            df: The dataframe to be drawn.
-
-        Returns:
-            A correlation matrix of the given dataframe.
         """
-        corr = df.corr()
+        if self.correlation_matrix is None:
+            raise ValueError("Correlation matrix has not been calculated yet.")
+
         fig, ax = plt.subplots(figsize=(12, 8), tight_layout=True)
-        mask = np.triu(np.ones_like(corr, dtype=bool))
+        mask = np.triu(np.ones_like(self.correlation_matrix, dtype=bool))
         cmap = sns.diverging_palette(220, 10, as_cmap=True)
         sns.heatmap(
-            corr,
+            self.correlation_matrix,
             mask=mask,
             vmax=0.3,
             center=0,
@@ -95,10 +93,12 @@ class MLForecaster:
             annot=True,
             square=True,
             linewidths=0.5,
-            annot_kws={"Times New Roman"},
+            annot_kws={"fontname": "Times New Roman"},
             cbar_kws={"shrink": 0.5},
             fmt=".2f",
+            ax=ax,
         )
+        plt.show()
 
     def make_forecasts(self, target: str, ylabel: str) -> None:
         """
@@ -264,7 +264,7 @@ class MLForecaster:
 
     def _preprocess_data(
         self, target: str
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Series]:
+    ) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
         if target == "CPI YoY":
             pro_forecasts_col = "CPI YoY forecasts"
         elif target == "Unemployment rate":
@@ -275,10 +275,34 @@ class MLForecaster:
             )
 
         df = pd.read_csv(self.dataset, parse_dates=["Date"], index_col="Date")
+
         X = df.loc[:, (df.columns != pro_forecasts_col) & (df.columns != target)]
         y = df.loc[:, target]
         pro_forecasts = df.loc[:, pro_forecasts_col]
+        df_excluding_pro_forecasts = df.loc[:, df.columns != pro_forecasts_col]
 
+        self.correlation_matrix = (
+            df_excluding_pro_forecasts.corr()
+        )  # Save the correlation matrix
+
+        return self._split_data(X, y) + (pro_forecasts,)
+
+    def _split_data(
+        self, X: pd.DataFrame, y: pd.DataFrame
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        """
+        Split data into training set and test set.
+
+        Args:
+            X (pd.DataFrame): The independent variables.
+            y (pd.Series): The dependent variables.
+
+        Returns:
+            X_train (pd.DataFrame): The training set of independent variables.
+            X_test (pd.DataFrame): The test set of independent variables.
+            y_train (pd.Series): The training set of dependent variables.
+            y_test (pd.Series): The test set of dependent variables.
+        """
         # Standardize independent variables
         scaler = StandardScaler().fit(X)
         X_scaled = scaler.transform(X)
@@ -288,7 +312,7 @@ class MLForecaster:
             X_scaled, y, test_size=0.2, random_state=SEED, shuffle=False
         )
 
-        return X_train, X_test, y_train, y_test, pro_forecasts
+        return X_train, X_test, y_train, y_test
 
     def _elastic_net(self, target: str, ylabel: str) -> None:
         """
@@ -408,7 +432,6 @@ class MLForecaster:
             pro_forecast (pd.Series): Forecasts made by professionals.
             ylabel (str): The label of y-axis.
         """
-
         X_train, X_test, y_train, y_test, pro_forecasts = self._preprocess_data(target)
 
         # Reshape data
