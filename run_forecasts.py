@@ -8,25 +8,23 @@ def main():
     )
     parser.add_argument(
         "model",
+        default="en",
         type=str,
         choices=["en", "rf", "svr", "lstm"],
-        required=True,
         help="Model to run forecasts for",
     )
     parser.add_argument(
-        "dataset", type=str, required=True, help="Path of the data to run forecasts for"
+        "dataset", type=str, help="Path of the data to run forecasts for"
     )
     parser.add_argument(
         "target",
         type=str,
         choices=["CPI YoY", "Unemployment rate"],
-        required=True,
         help="Indicator to run forecasts for",
     )
     parser.add_argument(
         "ylabel",
         type=str,
-        required=True,
         help="Label for the y-axis of the plot",
     )
 
