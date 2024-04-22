@@ -56,6 +56,7 @@ class MLForecaster:
         dataset (str): The dataset to be used.
         model (str): The model to be used.
         model_name (str): The full name of the model.
+        correlation_matrix (pd.DataFrame): The correlation matrix of the dataset.
     """
 
     def __init__(self, dataset: str, model: str = "en") -> None:
